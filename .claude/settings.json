@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/token_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
