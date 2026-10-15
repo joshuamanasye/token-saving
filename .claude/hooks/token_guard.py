@@ -10,7 +10,9 @@ Written rules bind an agent at decision points but not habits, so these are enfo
 
 Everything read stays in context and is re-sent on every later call, so one dump costs its size
 times the number of calls left in the session. Deny, never ask: the cheap form becomes the only form.
-Tune the limits below per project. Self-check: python .claude/hooks/test_token_guard.py
+One call may print MAX_DUMP lines per statement and MAX_LINES in total (`cat a; cat b; cat c`).
+The caps stay high on purpose: a denied call costs one more round trip at the full context
+(60-80k tokens), so splitting a legitimate 20 KB read is a net loss. Tune the limits per project. Self-check: python .claude/hooks/test_token_guard.py
 """
 import json
 import os
@@ -53,11 +55,10 @@ def count_lines(cwd, name):
 def guard_read(tool_input):
     path = tool_input.get("file_path") or ""
     limit = tool_input.get("limit") or 0
-    if tool_input.get("offset") and not limit:
-        return  # offset alone reads to the end, but the caller already aimed somewhere
     if limit and limit <= MAX_LINES:
         return
-    lines = count_lines(os.getcwd(), path)
+    # offset alone reads up to 2000 lines from there
+    lines = count_lines(os.getcwd(), path) - (tool_input.get("offset") or 0)
     if lines > MAX_LINES:
         deny(
             f"{path} is {lines} lines; a whole-file read stays in context for the rest of the "
@@ -130,6 +131,8 @@ def dump_size(words, cwd):
         for a, b in re.findall(r"(\d+),(\d+|\$)p", stage):
             worst = max(worst, (total if b == "$" else int(b)) - int(a) + 1)
         return worst
+    if cmd == "sed" and not any(w.startswith("-i") or w == "--in-place" for w in args):
+        return files(args)  # a substitution without -n/-i prints the whole file
     if cmd == "grep" and any(w in ("--invert-match",) or re.fullmatch(r"-[a-zA-Z]*v[a-zA-Z]*", w) for w in args):
         rest = [w for w in args if not w.startswith("-")]
         return files(rest[1:])  # first non-flag word is the pattern
@@ -137,6 +140,7 @@ def dump_size(words, cwd):
 
 
 def guard_dump(cmd, cwd):
+    total = 0
     for stmt in re.split(r"&&|\|\||;|\n", strip_heredocs(cmd)):
         stages = [s.strip() for s in stmt.split("|")]
         words = words_of(stages[0])
@@ -156,6 +160,10 @@ def guard_dump(cmd, cwd):
             deny(f"`{stages[0][:60]}` would print ~{n} lines into context, re-sent on every later call. "
                  f"Grep for what you need, or print a range of at most {MAX_DUMP} lines "
                  f"(`sed -n A,Bp`, Read with offset/limit).")
+        total += n
+    if total > MAX_LINES:
+        deny(f"This call would print ~{total} lines across its statements, more than one Read may "
+             f"({MAX_LINES}). Read only the files you are about to change, or grep the rest.")
 
 
 def main():

@@ -18,7 +18,7 @@ def denied(tool, tool_input, cwd):
 def main():
     d = tempfile.mkdtemp()
     os.makedirs(os.path.join(d, "sub"))
-    for name, n in (("big.txt", 1000), ("small.txt", 50), ("sub/big.txt", 1000)):
+    for name, n in (("big.txt", 1000), ("small.txt", 50), ("mid.txt", 350), ("sub/big.txt", 1000)):
         with open(os.path.join(d, name), "w") as fh:
             fh.write("x\n" * n)
     big = os.path.join(d, "big.txt")
@@ -45,6 +45,11 @@ def main():
         ("Bash", "grep -v foo big.txt", True),
         ("Bash", "grep -v foo big.txt | head", False),
         ("Bash", "grep foo big.txt", False),
+        ("Bash", "sed 's/x/y/' big.txt", True),
+        ("Bash", "sed -i 's/x/y/' big.txt", False),
+        ("Bash", "sed 's/x/y/' small.txt", False),
+        ("Bash", "cat mid.txt; cat mid.txt; cat mid.txt", True),
+        ("Bash", "cat mid.txt; cat small.txt", False),
         ("Bash", "git log --oneline -5", False),
         ("Bash", "git log -p", True),
         ("Bash", "git log -p -2 -- x.go", False),
@@ -61,6 +66,8 @@ def main():
         ("Read", {"file_path": big}, True),
         ("Read", {"file_path": big, "offset": 10, "limit": 100}, False),
         ("Read", {"file_path": big, "limit": 5000}, True),
+        ("Read", {"file_path": big, "offset": 100}, True),
+        ("Read", {"file_path": big, "offset": 900}, False),
         ("Read", {"file_path": os.path.join(d, "small.txt")}, False),
     ]
     bad = []

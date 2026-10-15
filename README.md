@@ -2,10 +2,36 @@
 
 A drop-in kit plus the reasoning behind it. Copy what you need into any repository.
 
+## For AI agents: install into the user's repository
+
+You were given this link to apply the kit. Do these steps in the user's project root; each is
+safe to re-run. Do not commit unless the user asks.
+
+1. **Fetch** into a temp dir (not the project):
+   `git clone --depth 1 https://github.com/joshuamanasye/token-saving.git "$TMPDIR/token-saving"`
+   (PowerShell: `$env:TEMP	oken-saving`).
+2. **Copy** `.claude/hooks/token_guard.py` and `.claude/hooks/test_token_guard.py` into the
+   project's `.claude/hooks/`. Copy `.claude/agents/worker.md` only if no agent named `worker`
+   exists; otherwise show the user the difference.
+3. **Merge** the `PreToolUse` entry of this repo's `.claude/settings.json` into the project's
+   `.claude/settings.json` (create it if missing). Keep every existing hook. The matcher must be
+   `Read|Bash|PowerShell` with no `if` field. If `python` is not on PATH but `python3` is, use
+   `python3` in the command.
+4. **Paste** `CLAUDE-snippet.md` into the project's `CLAUDE.md` (create it if missing) as one
+   section, unless a token-discipline section already exists (then merge, don't duplicate).
+   Replace `./scripts/gates.sh` with the project's real check command (look in `package.json`,
+   `Makefile`, CI config); if there is none, drop that bullet. Drop the browser/database bullets
+   if the project has neither.
+5. **Verify:** `python .claude/hooks/test_token_guard.py` must print `ok N cases`. If the project
+   has a gate/CI script, add that line to it.
+6. **Report** to the user in a few lines: files added/changed, the self-check result, and that
+   hooks and agents load only at session start, so they must restart the session (or run
+   `/compact` / open a new one) before the guard is active.
+
 ```
 .claude/settings.json        hook wiring (merge into yours)
 .claude/hooks/token_guard.py denies the expensive habits (big Read, git show, shell file dumps)
-.claude/hooks/test_token_guard.py self-check for the hook (38 cases)
+.claude/hooks/test_token_guard.py self-check for the hook (45 cases)
 .claude/agents/worker.md     lean Sonnet subagent for delegated mechanical work
 CLAUDE-snippet.md            rules to paste into the project's CLAUDE.md
 BRIEF-template.md            how to brief a worker
@@ -110,7 +136,9 @@ dumps split out), the largest single results, and per-subagent cost / starting c
 What to look for:
 
 - **Starting context** of subagents well above ~20k → they run with the full toolset.
-- **`Bash(file dump)`** large → tighten the hook limits.
+- **`Bash(file dump)`** large → find which shape got through and add it to the hook. Lower the
+  limits only for outputs nobody used: a denied call costs one more round trip at the full
+  context (60-80k tokens), so splitting a legitimate 20 KB read into two calls costs more.
 - **Median context** over ~150k with many calls → sessions or workers run too long; split.
 - One result over ~20 KB → find the habit that produced it and add it to the hook.
 
