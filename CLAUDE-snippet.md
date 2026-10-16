@@ -19,6 +19,7 @@ Cost = context size × call count. Every call re-sends everything read so far; a
 - **Long multi-item runs:** one fresh session per item; the orchestrator reads reports, not files.
 - **Hook-enforced** (`.claude/hooks/token_guard.py`, Bash and PowerShell): `Read` over 800 lines
   without a range, `git show` without `--format=`, `git log -p` without a count, any shell command
-  printing over 400 lines of a file (`cat`/`Get-Content`, `grep -v`, `sed`, `head`/`tail`) or over
-  800 lines in one call.
+  printing over 400 lines of a file (`cat`/`Get-Content`, `grep -v`, `sed`, `head`/`tail`, `awk 1`,
+  `nl`, `less`, also behind `X=1`, `env`, `( )`, `bash -c` or a wide `| head`) or over 800 lines in
+  one call. Prefix a command with `TOKEN_GUARD=off` for the rare case the full output is needed.
   Extend the hook and its test, not this list, when a habit keeps drifting.

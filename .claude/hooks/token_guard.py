@@ -10,6 +10,8 @@ Written rules bind an agent at decision points but not habits, so these are enfo
 
 Everything read stays in context and is re-sent on every later call, so one dump costs its size
 times the number of calls left in the session. Deny, never ask: the cheap form becomes the only form.
+Commands are normalised first (`X=1`/`env` prefixes, `( )`, `bash -c '...'`, every `| && ;` segment)
+so `X=1 cat f` or `cat f | head -n 900` is judged like `cat f`. `TOKEN_GUARD=off` skips shell checks.
 One call may print MAX_DUMP lines per statement and MAX_LINES in total (`cat a; cat b; cat c`).
 The caps stay high on purpose: a denied call costs one more round trip at the full context
 (60-80k tokens), so splitting a legitimate 20 KB read is a net loss. Tune the limits per project. Self-check: python .claude/hooks/test_token_guard.py
@@ -22,11 +24,10 @@ import sys
 
 MAX_LINES = 800      # Read without a range
 MAX_DUMP = 400       # lines a shell command may print from files
-# A pipeline stage starting with one of these bounds or reduces what reaches the context.
-BOUNDED = ("head", "tail", "wc", "grep -c", "less", "select-object -first", "select-object -last",
-           "select -first", "select -last", "measure-object", "measure")
-READERS = {"cat", "type", "get-content", "gc"}
+READERS = {"cat", "type", "get-content", "gc", "nl", "less", "more", "tac", "bat"}
 CD = {"cd", "set-location", "sl", "pushd", "chdir"}
+# `bash -c '...'` / `sh -lc "..."` is judged by what it runs
+SHELL_C = re.compile(r"\b(?:ba|z)?sh\s+-l?c\s+(['\"])(.*?)\1", re.S)
 
 
 def deny(reason):
@@ -90,10 +91,21 @@ def stdout_redirected(stage):
 
 
 def words_of(stage):
+    """Words of one pipeline stage, without ( ) { } wrappers, VAR=value prefixes or `env`."""
     try:
-        return [w.strip("'\"") for w in shlex.split(stage, posix=False)]
+        words = [w.strip("'\"") for w in shlex.split(re.sub(r"^[\s({]+|[\s)}]+$", "", stage), posix=False)]
     except ValueError:
         return []
+    while words:
+        if re.match(r"[A-Za-z_]\w*=", words[0]):
+            words = words[1:]
+        elif words[0] == "env":
+            words = words[1:]
+            while words and words[0].startswith("-"):
+                words = words[2 if words[0] == "-u" else 1:]
+        else:
+            break
+    return words
 
 
 def num_after(words, flags):
@@ -107,19 +119,59 @@ def num_after(words, flags):
     return None
 
 
+def head_count(args):
+    """Lines head/tail keep: "N", or "+K" for tail from line K to the end."""
+    n = num_after(args, ("-n", "--lines"))
+    if n is None:
+        m = next((w for w in args if re.fullmatch(r"-\d+", w)), None)
+        n = m[1:] if m else "10"
+    return n
+
+
+def bound(words):
+    """Lines a later pipeline stage lets through, or None when it passes everything on."""
+    cmd = words[0].lower()
+    if cmd in ("head", "tail"):
+        n = head_count(words[1:])
+        return None if n.startswith("+") else int(n)
+    if cmd in ("wc", "measure-object", "measure") or (cmd == "grep" and "-c" in words):
+        return 0
+    if cmd in ("select-object", "select"):
+        n = num_after(words[1:], ("-first", "-last"))
+        return int(n) if n else None
+    return None
+
+
+def awk_files(args):
+    """Files awk prints whole (program `1` or an unconditional `{print ...}`), else None."""
+    if any(w.startswith("-f") for w in args):
+        return None
+    pos, skip = [], False
+    for w in args:
+        if skip or w.startswith("-"):
+            skip = w in ("-F", "-v")
+            continue
+        pos.append(w)
+    prog = pos[0] if pos else ""
+    if re.fullmatch(r"1|\{\s*print\b[^}]*\}", prog) and not re.search(r"\b(if|exit|next)\b", prog):
+        return pos[1:]
+    return None
+
+
 def dump_size(words, cwd):
     """Lines a single command would print from files, or 0 if it is not a file dump."""
     cmd = words[0].lower()
     args = words[1:]
     files = lambda ws: sum(count_lines(cwd, w) for w in ws if not w.startswith("-"))
+    if cmd == "bat" and any(w.startswith(("-r", "--line-range")) for w in args):
+        return 0
     if cmd in READERS:
         n = num_after(args, ("-totalcount", "-head", "-first", "-tail", "-last"))
         return int(n) if n else files(args)
+    if cmd == "awk":
+        return files(awk_files(args) or [])
     if cmd in ("head", "tail"):
-        n = num_after(args, ("-n", "--lines"))
-        if n is None:
-            m = next((w for w in args if re.fullmatch(r"-\d+", w)), None)
-            n = m[1:] if m else "10"
+        n = head_count(args)
         total = files(args)
         if n.startswith("+"):  # tail -n +K: from line K to the end
             return max(total - int(n) + 1, 0)
@@ -141,7 +193,7 @@ def dump_size(words, cwd):
 
 def guard_dump(cmd, cwd):
     total = 0
-    for stmt in re.split(r"&&|\|\||;|\n", strip_heredocs(cmd)):
+    for stmt in re.split(r"&&|\|\||;|\n", SHELL_C.sub(r"\2", strip_heredocs(cmd))):
         stages = [s.strip() for s in stmt.split("|")]
         words = words_of(stages[0])
         if not words:
@@ -153,9 +205,13 @@ def guard_dump(cmd, cwd):
             if m:
                 cwd = f"{m.group(1).upper()}:/{m.group(2)}"
             continue
-        if any(stdout_redirected(s) for s in stages) or any(s.lower().startswith(BOUNDED) for s in stages[1:]):
+        if any(stdout_redirected(s) for s in stages):
             continue
         n = dump_size(words, cwd)
+        for w in map(words_of, stages[1:]):
+            if w:
+                b = bound(w)
+                n = n + dump_size(w, cwd) if b is None else min(n, b)
         if n > MAX_DUMP:
             deny(f"`{stages[0][:60]}` would print ~{n} lines into context, re-sent on every later call. "
                  f"Grep for what you need, or print a range of at most {MAX_DUMP} lines "
@@ -177,6 +233,8 @@ def main():
         guard_read(tool_input)
     elif tool in ("Bash", "PowerShell"):
         cmd = strip_heredocs(tool_input.get("command") or "")
+        if re.search(r"\bTOKEN_GUARD=off\b", cmd):
+            return  # explicit escape hatch, for the rare call whose full output is needed
         guard_git(cmd)
         guard_dump(cmd, payload.get("cwd") or os.getcwd())
 

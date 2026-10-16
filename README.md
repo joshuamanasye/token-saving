@@ -31,7 +31,7 @@ safe to re-run. Do not commit unless the user asks.
 ```
 .claude/settings.json        hook wiring (merge into yours)
 .claude/hooks/token_guard.py denies the expensive habits (big Read, git show, shell file dumps)
-.claude/hooks/test_token_guard.py self-check for the hook (45 cases)
+.claude/hooks/test_token_guard.py self-check for the hook (75 cases)
 .claude/agents/worker.md     lean Sonnet subagent for delegated mechanical work
 CLAUDE-snippet.md            rules to paste into the project's CLAUDE.md
 BRIEF-template.md            how to brief a worker
