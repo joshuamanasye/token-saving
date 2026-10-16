@@ -9,20 +9,21 @@ safe to re-run. Do not commit unless the user asks.
 
 1. **Fetch** into a temp dir (not the project):
    `git clone --depth 1 https://github.com/joshuamanasye/token-saving.git "$TMPDIR/token-saving"`
-   (PowerShell: `$env:TEMP	oken-saving`).
+   (PowerShell: `$env:TEMP\token-saving`).
 2. **Copy** `.claude/hooks/token_guard.py` and `.claude/hooks/test_token_guard.py` into the
    project's `.claude/hooks/`. Copy `.claude/agents/worker.md` only if no agent named `worker`
    exists; otherwise show the user the difference.
 3. **Merge** the `PreToolUse` entry of this repo's `.claude/settings.json` into the project's
    `.claude/settings.json` (create it if missing). Keep every existing hook. The matcher must be
-   `Read|Bash|PowerShell` with no `if` field. If `python` is not on PATH but `python3` is, use
-   `python3` in the command.
+   `Read|Bash|PowerShell` with no `if` field. Keep the command as is: it runs `python3` when it
+   exists, else `python`. A hook whose interpreter is missing fails silently and denies nothing.
 4. **Paste** `CLAUDE-snippet.md` into the project's `CLAUDE.md` (create it if missing) as one
    section, unless a token-discipline section already exists (then merge, don't duplicate).
    Replace `./scripts/gates.sh` with the project's real check command (look in `package.json`,
    `Makefile`, CI config); if there is none, drop that bullet. Drop the browser/database bullets
    if the project has neither.
-5. **Verify:** `python .claude/hooks/test_token_guard.py` must print `ok N cases`. If the project
+5. **Verify:** `python3 .claude/hooks/test_token_guard.py` (or `python` where there is no
+   `python3`) must print `ok N cases`. If the project
    has a gate/CI script, add that line to it.
 6. **Report** to the user in a few lines: files added/changed, the self-check result, and that
    hooks and agents load only at session start, so they must restart the session (or run
@@ -146,8 +147,9 @@ What to look for:
 
 1. Copy `.claude/hooks/token_guard.py` and `.claude/agents/worker.md`; merge
    `.claude/settings.json` into the project's (the matcher `Read|Bash|PowerShell` must have no `if` filter, or
-   the shell-dump guard never runs; an `if` like `Bash(git show*)` silently limits it to that one command). Requires `python` on PATH.
+   the shell-dump guard never runs; an `if` like `Bash(git show*)` silently limits it to that one command). Requires `python3` or `python` on PATH; the command
+   tries `python3` first, since many Linux systems have no `python`.
 2. Paste `CLAUDE-snippet.md` into the project's CLAUDE.md; adjust the gate/test commands.
 3. Restart the session so the agent and hook load.
-4. Check: `python .claude/hooks/test_token_guard.py` prints `ok`; add it to the project's gate script.
+4. Check: `python3 .claude/hooks/test_token_guard.py` prints `ok`; add it to the project's gate script.
    Then in a session, `cat <some file over 400 lines>` should be denied with a hint.

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/token_guard.py\"",
+            "command": "\"$(command -v python3 || echo python)\" \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/token_guard.py\"",
             "timeout": 10
           }
         ]
