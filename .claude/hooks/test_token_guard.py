@@ -56,6 +56,8 @@ def main():
         ("Bash", "git show abc123", True),
         ("Bash", "git show --format= abc123 -- x.go", False),
         ("Bash", "git show HEAD:go.mod", False),
+        ("Bash", "grep -n \"git show\\|def \" token_guard.py", False),
+        ("Bash", "cd /e/x && git show HEAD | head -1", True),
         ("Bash", "python - <<'EOF'\nprint('git log -p and git show abc')\nEOF", False),
         ("PowerShell", "Get-Content big.txt", True),
         ("PowerShell", f"Get-Content \"{big}\"", True),

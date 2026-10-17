@@ -68,14 +68,15 @@ def guard_read(tool_input):
 
 
 def guard_git(cmd):
-    if re.search(r"\bgit show\b", cmd) and "--format=" not in cmd and "--oneline" not in cmd \
+    # Only `git` in command position: `grep "git show" f` merely mentions it.
+    if re.search(r"(^|[;&|({\n]\s*)git show\b", cmd) and "--format=" not in cmd and "--oneline" not in cmd \
             and not re.search(r"git show \S+:\S", cmd):
         deny(
             "`git show` reprints the whole commit message above the diff. "
             "Use `git show --format= <hash> -- <path>` "
             "for the diff alone; `git log -1 <hash>` when you actually want the message."
         )
-    if re.search(r"\bgit log\b[^|;&]*\s(-p|--patch)\b", cmd) \
+    if re.search(r"(^|[;&|({\n]\s*)git log\b[^|;&]*\s(-p|--patch)\b", cmd) \
             and not re.search(r"\s(-\d+|-n\s*\d+|--max-count[= ]\d+)", cmd):
         deny("`git log -p` without a count prints every diff in history. Add `-1`/`-n N` and a `-- <path>`.")
 
