@@ -11,14 +11,15 @@ safe to re-run. Do not commit unless the user asks.
    `git clone --depth 1 https://github.com/joshuamanasye/token-saving.git "$TMPDIR/token-saving"`
    (PowerShell: `$env:TEMP\token-saving`).
 2. **Copy** `.claude/hooks/token_guard.py` and `.claude/hooks/test_token_guard.py` into the
-   project's `.claude/hooks/`. Copy `.claude/agents/worker.md` only if no agent named `worker`
-   exists; otherwise show the user the difference.
+   project's `.claude/hooks/`. Copy `.claude/agents/worker.md` and `.claude/agents/reviewer.md`
+   only if no agent of that name exists; otherwise show the user the difference.
 3. **Merge** the `PreToolUse` entry of this repo's `.claude/settings.json` into the project's
    `.claude/settings.json` (create it if missing). Keep every existing hook. The matcher must be
    `Read|Bash|PowerShell` with no `if` field. Keep the command as is: it runs `python3` when it
    exists, else `python`. A hook whose interpreter is missing fails silently and denies nothing.
 4. **Paste** `CLAUDE-snippet.md` into the project's `CLAUDE.md` (create it if missing) as one
-   section, unless a token-discipline section already exists (then merge, don't duplicate).
+   section each (token discipline; design → test → review), unless one already exists (then
+   merge, don't duplicate).
    Replace `./scripts/gates.sh` with the project's real check command (look in `package.json`,
    `Makefile`, CI config); if there is none, drop that bullet. Drop the browser/database bullets
    if the project has neither.
@@ -34,6 +35,7 @@ safe to re-run. Do not commit unless the user asks.
 .claude/hooks/token_guard.py denies the expensive habits (big Read, git show, shell file dumps)
 .claude/hooks/test_token_guard.py self-check for the hook (75 cases)
 .claude/agents/worker.md     lean Sonnet subagent for delegated mechanical work
+.claude/agents/reviewer.md   read-only Opus reviewer: fresh context, one lens per run
 CLAUDE-snippet.md            rules to paste into the project's CLAUDE.md
 BRIEF-template.md            how to brief a worker
 tools/analyze_tokens.py      measure a session (and its subagents) from its transcript
@@ -125,6 +127,22 @@ Earlier measurements in the same kind of project:
 - CLAUDE.md is loaded on **every** call of the main session and every subagent. Keep rules there,
   move evidence and history to a separate doc that is read on demand.
 - Disable MCP servers / plugins the project doesn't use; each adds tool schemas to every call.
+
+### 5. Fewer review rounds: design, test, then an independent reviewer
+
+Re-asking the author session to "review the module" is the expensive loop: each pass runs at full
+context, shares the author's blind spots, and has no list to review against, so it always finds
+*something* and never converges. Cheaper:
+
+- **Rules before code** (5–15 lines: who may do what, state transitions, irreversible effects,
+  where each is enforced). A missing server-side check is a design gap; no code review catches it
+  as cheaply as the design step does.
+- **One test per rule**, including the refusal. The test, not another review, keeps it fixed.
+- **Risky changes only: a fresh-context reviewer** (`.claude/agents/reviewer.md`: Opus, 4 tools,
+  read-only). Give it the diff, the rules and one lens; never the author's summary (it anchors
+  the reviewer to the author's reasoning). 2–3 lenses in parallel for the riskiest changes.
+- **Verify findings before fixing**, and turn a bug class seen twice into a hook or architecture
+  test. Done = no HIGH findings and every rule tested, not "the review found nothing".
 
 ## Measure, then tune
 

@@ -23,3 +23,18 @@ Cost = context size × call count. Every call re-sends everything read so far; a
   `nl`, `less`, also behind `X=1`, `env`, `( )`, `bash -c` or a wide `| head`) or over 800 lines in
   one call. Prefix a command with `TOKEN_GUARD=off` for the rare case the full output is needed.
   Extend the hook and its test, not this list, when a habit keeps drifting.
+
+## Design → test → review (non-trivial features)
+
+1. **Rules first.** Before code, write 5–15 lines: who may do what, state transitions, money or
+   other irreversible effects, and where each rule is enforced. Server-side always; a client check
+   is UX only. Put them in the plan (plan mode) and keep them for step 3.
+2. **One test per rule**, including the refusal (wrong role, wrong state, client check skipped).
+3. **Independent review for risky changes** (authorization, money, deletes, migrations, the
+   project's core domain): `subagent_type: "reviewer"` (`.claude/agents/reviewer.md`: Opus,
+   read-only, fresh context). Brief = diff range + the rules + ONE lens (`security`, `data`,
+   `domain`, `ui`); never your summary of the work. Run 2–3 lenses in parallel for the riskiest.
+   Small or cosmetic changes skip this.
+4. **Verify each finding** against code or data before fixing; reviewers report false positives too.
+5. **Every real bug leaves a regression test.** Same bug class twice → make it a mechanical check
+   (architecture test, hook, lint), not another prose line. Done = no HIGH findings, every rule tested.
