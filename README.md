@@ -1,6 +1,8 @@
-# Token saving for Claude Code projects
+# Token saving for Claude Code and omp projects
 
-A drop-in kit plus the reasoning behind it. Copy what you need into any repository.
+A drop-in kit plus the reasoning behind it. Copy what you need into any repository. The guard
+also runs under [omp](https://github.com/can1357/oh-my-pi), with any model provider (see
+[omp](#omp-any-model-provider)).
 
 ## For AI agents: install into the user's repository
 
@@ -26,7 +28,13 @@ safe to re-run. Do not commit unless the user asks.
 5. **Verify:** `python3 .claude/hooks/test_token_guard.py` (or `python` where there is no
    `python3`) must print `ok N cases`. If the project
    has a gate/CI script, add that line to it.
-6. **Report** to the user in a few lines: files added/changed, the self-check result, and that
+6. **omp users** (the project has `.omp/`, or the user runs `omp`): also copy `.omp/hooks/pre/`
+   and `.omp/hooks/post/` into the project's `.omp/hooks/`. If the project root has
+   `.github/copilot-instructions.md`, `.claude/CLAUDE.md` or `.omp/AGENTS.md` next to `CLAUDE.md`,
+   omp loads only one of them (see [omp](#omp-any-model-provider)); add the line
+   `Project rules: @../CLAUDE.md` to the one that wins (highest first: `.omp/AGENTS.md`,
+   `.claude/CLAUDE.md`, `.github/copilot-instructions.md`).
+7. **Report** to the user in a few lines: files added/changed, the self-check result, and that
    hooks and agents load only at session start, so they must restart the session (or run
    `/compact` / open a new one) before the guard is active.
 
@@ -39,6 +47,8 @@ safe to re-run. Do not commit unless the user asks.
 CLAUDE-snippet.md            rules to paste into the project's CLAUDE.md
 BRIEF-template.md            how to brief a worker
 tools/analyze_tokens.py      measure a session (and its subagents) from its transcript
+.omp/hooks/pre/token-guard.ts       omp adapter: runs token_guard.py on omp's read/bash calls
+.omp/hooks/post/compaction-state.ts omp: live git status/log handed over after every compaction
 ```
 
 ## The cost model
@@ -160,6 +170,40 @@ What to look for:
   context (60-80k tokens), so splitting a legitimate 20 KB read into two calls costs more.
 - **Median context** over ~150k with many calls → sessions or workers run too long; split.
 - One result over ~20 KB → find the habit that produced it and add it to the hook.
+
+## omp (any model provider)
+
+[omp](https://github.com/can1357/oh-my-pi) is a coding-agent harness that talks to Anthropic,
+OpenAI, Google, DeepSeek, local models and others. The kit works there too; the rules in
+`token_guard.py` stay the single source.
+
+- **`.omp/hooks/pre/token-guard.ts`** maps omp's `read` (`path:N-M`, `path:-N`, `path:N` = to
+  end of file) and `bash` calls onto the Claude hook payload, runs `token_guard.py`, and blocks
+  with its reason. Internal URIs, URLs, `?q=` queries and bare reads of source files (omp returns
+  an outline for those) are not guarded. A missing `python` lets the call through.
+- **`.omp/hooks/post/compaction-state.ts`** sends the agent `git status --short` and
+  `git log --oneline -3` after every compaction. omp compacts automatically, mid-task included;
+  this way uncommitted work is read from git, not reconstructed from the summary.
+- **Project instructions.** omp reads `CLAUDE.md`, but keeps **one project context file per
+  directory depth**, and `.omp/AGENTS.md`, `.claude/CLAUDE.md`, `.github/copilot-instructions.md`
+  all outrank a root `CLAUDE.md`. If one of them exists, `CLAUDE.md` is silently dropped. Fix: add
+  `@../CLAUDE.md` to the winning file (paths resolve from that file's folder); omp expands `@`
+  imports.
+- `.claude/agents/*.md` are not loaded by omp (different schema). Its bundled `task`, `scout` and
+  `reviewer` agents already start small.
+
+Measured on one repository, same model (Claude Opus) in both harnesses, 2026-10:
+
+| | omp | Claude Code |
+|---|---:|---:|
+| First call of a session | 18k | 74–83k |
+| Subagent first call | 13–16k | 57k general-purpose, 17k restricted |
+| First call after compaction | 40k | 80k (median of 93) |
+| Compaction summary | 10.8k chars | 11.5k chars (median) |
+
+The summaries are the same size; the difference is the fixed part every call carries. Session
+length still decides most of the cost in both: a two-task omp session ran at 144k median context.
+One task per session and a compaction after each commit remain the main levers.
 
 ## Install
 
