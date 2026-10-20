@@ -149,8 +149,13 @@ context, shares the author's blind spots, and has no list to review against, so 
   as cheaply as the design step does.
 - **One test per rule**, including the refusal. The test, not another review, keeps it fixed.
 - **Risky changes only: a fresh-context reviewer** (`.claude/agents/reviewer.md`: Opus, 4 tools,
-  read-only). Give it the diff, the rules and one lens; never the author's summary (it anchors
-  the reviewer to the author's reasoning). 2–3 lenses in parallel for the riskiest changes.
+  read-only). Give it the diff, the rules and the lenses to cover; never the author's summary (it
+  anchors the reviewer to the author's reasoning).
+- **1 session = 1 reviewer.** When a session works on several tasks, wait until all of them are
+  done and ask one reviewer to review them all. A reviewer per task, or review → fix → review
+  rounds, each re-read the same diff and the same docs at full price; measured on one session,
+  eight rounds of two reviewers on one change found something new every round and never
+  converged. Fix or record the findings of that one review; another review is a new session.
 - **Verify findings before fixing**, and turn a bug class seen twice into a hook or architecture
   test. Done = no HIGH findings and every rule tested, not "the review found nothing".
 

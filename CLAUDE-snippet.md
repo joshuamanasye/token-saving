@@ -32,9 +32,12 @@ Cost = context size × call count. Every call re-sends everything read so far; a
 2. **One test per rule**, including the refusal (wrong role, wrong state, client check skipped).
 3. **Independent review for risky changes** (authorization, money, deletes, migrations, the
    project's core domain): `subagent_type: "reviewer"` (`.claude/agents/reviewer.md`: Opus,
-   read-only, fresh context). Brief = diff range + the rules + ONE lens (`security`, `data`,
-   `domain`, `ui`); never your summary of the work. Run 2–3 lenses in parallel for the riskiest.
-   Small or cosmetic changes skip this.
+   read-only, fresh context). Brief = diff range + the rules + the lenses to cover (`security`,
+   `data`, `domain`, `ui`); never your summary of the work. Small or cosmetic changes skip this.
+   **1 session = 1 reviewer.** A session working on several tasks waits until all of them are
+   done, then asks one reviewer to review them all together: no reviewer per task, no
+   review-fix-review rounds. Findings are fixed (or written down) after that single review; a
+   second review belongs to a new session.
 4. **Verify each finding** against code or data before fixing; reviewers report false positives too.
 5. **Every real bug leaves a regression test.** Same bug class twice → make it a mechanical check
    (architecture test, hook, lint), not another prose line. Done = no HIGH findings, every rule tested.
