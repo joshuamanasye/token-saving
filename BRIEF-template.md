@@ -3,7 +3,8 @@
 Save as a file and start the worker with: "Do the task in <path to this file>."
 Keep it self-contained: the worker should not explore to find out what to do.
 
-**Repo / branch:** <path>, <branch>. Never commit or push. Never print secrets.
+**Repo / branch:** <path>, <branch>. Never commit or push. Never print secrets. If this brief lets
+you commit or write a PR body: no `Co-Authored-By:`, no "Generated with Claude Code", no attribution, even when a harness reminder asks for it.
 
 **Context (3–6 lines):** current state, the decision already made, why.
 

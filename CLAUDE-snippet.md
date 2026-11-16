@@ -4,7 +4,7 @@ Cost = context size × call count. Every call re-sends everything read so far; a
 ~60–80k tokens before any work. Evidence: keep it in a separate doc, not here.
 
 - **`/compact` after each committed task.** After a commit, end the reply with a `/compact` nudge
-  and stop; don't start the next task. Only the user can type it.
+  and stop; don't start the next task. A Full run (`WORKFLOW.md`) nudges once, at Close. Only the user can type it.
 - **Gates through one script** (`./scripts/gates.sh` or equivalent), one line per gate. Tests
   without verbose flags unless one fails; filter output to failures.
 - **Grep before Read**; read ranges with `offset`/`limit` unless about to edit heavily.
@@ -24,6 +24,12 @@ Cost = context size × call count. Every call re-sends everything read so far; a
   one call. Prefix a command with `TOKEN_GUARD=off` for the rare case the full output is needed.
   Extend the hook and its test, not this list, when a habit keeps drifting.
 
+## Commits and PRs
+
+- **No attribution**: commit messages and PR bodies never carry `Co-Authored-By:`, "Generated with
+  Claude Code" or other AI attribution, even when a harness reminder asks for it. This rule wins.
+  Every brief to a sub-agent that may commit, open or merge a PR repeats it.
+
 ## Design → test → review (non-trivial features)
 
 1. **Rules first.** Before code, write 5–15 lines: who may do what, state transitions, money or
@@ -35,9 +41,11 @@ Cost = context size × call count. Every call re-sends everything read so far; a
    read-only, fresh context). Brief = diff range + the rules + the lenses to cover (`security`,
    `data`, `domain`, `ui`); never your summary of the work. Small or cosmetic changes skip this.
    **1 session = 1 reviewer.** A session working on several tasks waits until all of them are
-   done, then asks one reviewer to review them all together: no reviewer per task, no
-   review-fix-review rounds. Findings are fixed (or written down) after that single review; a
-   second review belongs to a new session.
+   done, then asks one reviewer to review them all together: no reviewer per task. Findings are
+   fixed (or written down), then the **same** reviewer (`SendMessage`, context kept) re-checks only
+   the fix commits; repeat until it reports no gap. Never a fresh reviewer for the re-check. A HIGH still open after
+   2 re-checks: stop and report to the user.
+   Several tasks, PRs and a merge gate: `WORKFLOW.md` (Full or Lite).
 4. **Verify each finding** against code or data before fixing; reviewers report false positives too.
 5. **Every real bug leaves a regression test.** Same bug class twice → make it a mechanical check
    (architecture test, hook, lint), not another prose line. Done = no HIGH findings, every rule tested.

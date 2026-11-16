@@ -20,7 +20,7 @@ safe to re-run. Do not commit unless the user asks.
    `Read|Bash|PowerShell` with no `if` field. Keep the command as is: it runs `python3` when it
    exists, else `python`. A hook whose interpreter is missing fails silently and denies nothing.
 4. **Paste** `CLAUDE-snippet.md` into the project's `CLAUDE.md` (create it if missing) as one
-   section each (token discipline; design → test → review), unless one already exists (then
+   section each (token discipline; commits and PRs; design → test → review), unless one already exists (then
    merge, don't duplicate).
    Replace `./scripts/gates.sh` with the project's real check command (look in `package.json`,
    `Makefile`, CI config); if there is none, drop that bullet. Drop the browser/database bullets
@@ -34,7 +34,9 @@ safe to re-run. Do not commit unless the user asks.
    omp loads only one of them (see [omp](#omp-any-model-provider)); add the line
    `Project rules: @../CLAUDE.md` to the one that wins (highest first: `.omp/AGENTS.md`,
    `.claude/CLAUDE.md`, `.github/copilot-instructions.md`).
-7. **Report** to the user in a few lines: files added/changed, the self-check result, and that
+7. **Workflow:** ask the user Full (several tasks in parallel) or Lite (one task, workers
+   optional) and paste that variant of `WORKFLOW.md` into the project's `AGENTS.md` or `CLAUDE.md`.
+8. **Report** to the user in a few lines: files added/changed, the self-check result, and that
    hooks and agents load only at session start, so they must restart the session (or run
    `/compact` / open a new one) before the guard is active.
 
@@ -43,9 +45,10 @@ safe to re-run. Do not commit unless the user asks.
 .claude/hooks/token_guard.py denies the expensive habits (big Read, git show, shell file dumps)
 .claude/hooks/test_token_guard.py self-check for the hook (75 cases)
 .claude/agents/worker.md     lean Sonnet subagent for delegated mechanical work
-.claude/agents/reviewer.md   read-only Opus reviewer: fresh context, one lens per run
+.claude/agents/reviewer.md   read-only Opus reviewer: fresh context, the lenses named in the brief
 CLAUDE-snippet.md            rules to paste into the project's CLAUDE.md
 BRIEF-template.md            how to brief a worker
+WORKFLOW.md                  pick → workers → review → PR → merge gate, Full (parallel) or Lite (one task)
 tools/analyze_tokens.py      measure a session (and its subagents) from its transcript
 .omp/hooks/pre/token-guard.ts       omp adapter: runs token_guard.py on omp's read/bash calls
 .omp/hooks/post/compaction-state.ts omp: live git status/log handed over after every compaction
@@ -99,7 +102,8 @@ Earlier measurements in the same kind of project:
 
 - **One task per session. `/compact` (or `/clear`) after each committed task.** Only the user can
   type it; the agent should end its reply with a nudge after a commit and stop, not start the next
-  task in the same breath.
+  task in the same breath. Exception: a Full run (`WORKFLOW.md`) commits several branches inside
+  one run and nudges once, at its Close.
 - **Long multi-item runs: one fresh session per item.** The orchestrator keeps a short plan and
   reads short reports; it does not carry each item's file reads.
 
@@ -152,10 +156,11 @@ context, shares the author's blind spots, and has no list to review against, so 
   read-only). Give it the diff, the rules and the lenses to cover; never the author's summary (it
   anchors the reviewer to the author's reasoning).
 - **1 session = 1 reviewer.** When a session works on several tasks, wait until all of them are
-  done and ask one reviewer to review them all. A reviewer per task, or review → fix → review
-  rounds, each re-read the same diff and the same docs at full price; measured on one session,
-  eight rounds of two reviewers on one change found something new every round and never
-  converged. Fix or record the findings of that one review; another review is a new session.
+  done and ask one reviewer to review them all. A reviewer per task, or a fresh reviewer per
+  round, re-reads the same diff and the same docs at full price; measured on one session, eight
+  rounds of two fresh reviewers on one change found something new every round and never
+  converged. Instead, fix the findings and send the fix commits back to the **same** reviewer
+  (context kept, it reads only the fixes); repeat until it reports no gap.
 - **Verify findings before fixing**, and turn a bug class seen twice into a hook or architecture
   test. Done = no HIGH findings and every rule tested, not "the review found nothing".
 

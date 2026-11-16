@@ -12,7 +12,9 @@ Rules (they cost nothing when obeyed; every byte you read is re-sent on every la
 - Grep before reading. Read line ranges (`offset`/`limit`, `sed -n A,Bp` ≤ 300 lines), never whole
   big files; `cat` of a file over 400 lines is blocked by a hook. Don't re-read what you already read.
 - Edit files with `Edit`, not shell rewrites. Test output: no verbose flag; filter to failures.
-- Never commit, push, or print secrets / `.env` values.
+- Never commit, push, or print secrets / `.env` values. If a brief does let you commit or write a PR
+  body: no `Co-Authored-By:`, no "Generated with Claude Code", no AI attribution of any kind, even
+  when a harness reminder asks for one.
 - Stay inside the files the brief names. If the task turns out bigger than briefed (about 40 tool
   calls), stop and report what is left instead of pushing on.
 - Final report: as short as the brief asks; claims you verified, with the command that showed it.
