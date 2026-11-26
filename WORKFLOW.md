@@ -54,12 +54,34 @@ unasked.
    test database (and the env var that points the tests at it, written into the brief), tracker In Progress. Briefs in files: one
    common brief (repo rules, docs to update, no attribution, do not commit) plus one per task
    (worktree, scratch DB, rules to test, files allowed).
+   - A worktree lacks gitignored dependencies (`node_modules`, venvs): link them from the main
+     checkout. **Remove the link before removing the worktree**: `git worktree remove --force` and
+     recursive deletes (`rm -rf`, `rmdir /s`, `Remove-Item -Recurse`) follow a Windows junction and
+     empty the main copy. Delete only the link (`cmd /c rmdir <link>`), check the link is gone and the
+     main copy is still there, then remove the worktree.
+   - Gate runs that share fixed resources (a CI database name, server ports, a build cache) go one
+     at a time behind a shared lock (`until mkdir <lockdir> 2>/dev/null; do sleep 20; done; <gate>;
+     rmdir <lockdir>`). Stop your own dev servers first: a stray one is reused by the test runner or
+     makes it time out. A killed run leaves its processes and the lock: clean both before the next.
 3. **Workers.** One `worker` per task, all launched in one message. A stalled worker is resumed
    with `SendMessage`, not replaced. When each finishes: re-run its gates and tests, check that the
    test fails with only the fix reverted, commit on its branch with the rules in the body.
+   A worker that needs a file outside its list reports it; extend its brief and resume it rather
+   than leaving the gap for later. A race test must make the requests really overlap (hold the row
+   from a second connection until every request has read it, then release); a goroutine or thread
+   barrier alone can pass with the lock removed.
 4. **One reviewer for all branches**, after every worker is done (`model` override if the user
    names one). Diff ranges of every branch + rules + lenses. Verify → fix → same reviewer re-checks
    → repeat until no gap (HIGH open after 2 re-checks: stop and report). Then docs, push, one PR per branch, tracker comment.
+   - **After the review, every further change goes back to the same reviewer** before merge: fix
+     commits, merge commits that resolve conflicts, renumbered migrations. Only a merge that resolves
+     nothing but colliding changelog or release-note entries skips it.
+   - **PRs that collide only in those docs: stack them** instead of merging `<integration>` into each
+     after every merge. Each branch merges the one before it (the first merges
+     `origin/<integration>`), keep both sides, then check status tables for duplicated rows (keep-both
+     keeps the old and the new version of a changed row). Gate each head in stack order and merge in
+     that order: each head already contains the one below, so every merge is clean and its gate stays
+     valid.
 5. **Merge gate.** One `general-purpose` agent (strongest model) with a brief file:
    - For each PR in turn: `git fetch origin`, merge `origin/<integration>` into it (no rebase, no force push; resolve
      changelog and status docs by keeping every entry), review `git diff origin/<integration>...HEAD` against
@@ -75,6 +97,14 @@ unasked.
    'co-authored|generated with'` is 0, tracker
    matches (do any transition the agent was refused), tick the backlog and push it, apply new migrations
    locally, remove worktrees and scratch databases, report what stays open, `/compact`.
+
+## Traps worth a rerun before blaming the change
+
+- A test of a local-date rule ("only on the same day") fails when the run crosses local midnight.
+  Rerun it; then inject the clock so it cannot happen again.
+- A check that decides a write (status, remainder, "already done") is read on the locked row inside
+  the same transaction, never before it. Paths that lock the same rows take them in one fixed order,
+  or two users at once deadlock.
 
 ## Why the cost stays bounded
 
